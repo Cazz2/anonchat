@@ -10,8 +10,11 @@
 #include <thread>
 
 using namespace std;
-std::atomic<bool> connected(false);
-std::mutex cout_mutex;
+atomic<bool> connected(false);
+atomic<bool> chat(false);
+atomic<bool> running(true);
+mutex cout_mutex;
+int client_socket = -1;
 
 std::string get_ip(const char* hostname) {
     addrinfo hints{}, *res;
@@ -84,7 +87,7 @@ std::string read_http_response(int sock) {
 void connectServer(std::atomic<bool>& connected)
 {
     try {
-        std::string host = "example.com";
+        std::string host = "192.168.0.111";
         std::string ip = get_ip(host.c_str());
         int sock = connect_to_server(ip, 80);
         
@@ -101,6 +104,59 @@ void connectServer(std::atomic<bool>& connected)
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         connected = true;
+    }
+}
+
+void chat_listener() {
+    string buffer;
+    char temp[1024];
+    
+    while (running && chat) {
+        int bytes = recv(client_socket, temp, sizeof(temp), 0);
+        if (bytes <= 0) {
+            break;
+        }
+        
+        buffer.append(temp, bytes);
+        size_t pos;
+        while ((pos = buffer.find("\r\n")) != string::npos) {
+            string msg = buffer.substr(0, pos);
+            buffer.erase(0, pos + 2);
+            
+            if (!msg.empty()) {
+                lock_guard<mutex> lock(cout_mutex);
+                cout << "\nAnonymous: " << msg << "\n > " << flush;
+            }
+        }
+    }
+}
+
+void connect_chat() {
+    try {
+        string host = "192.168.0.111";
+        string ip = get_ip(host.c_str());
+        client_socket = connect_to_server(ip, 8080);
+        
+        string request = "CONNECT anonymous\r\n\r\n";
+        send(client_socket, request.c_str(), request.size(), 0);
+
+        {
+            lock_guard<mutex> lock(cout_mutex);
+            cout << "\rConnected to chat!     \n > " << flush;
+        }
+
+        chat = true;
+
+        thread listener(chat_listener);
+        listener.detach();
+
+    } catch (const exception& e) {
+        cerr << "Error: " << e.what() << endl;
+        connected = false;
+        if (client_socket != -1) {
+            close(client_socket);
+            client_socket = -1;
+        }
     }
 }
 
@@ -132,31 +188,41 @@ int main() {
 
     std::cout << "\n" << "Type 'connect' or just 'help' to start" << "\n" << std::endl;
 
-    while(connected)
-    {
-        std::string input;
-        std::cout << " > ";
-        std::getline(std::cin, input); 
-        if(input == "help")
+    while(running) {
+        string input;
         {
-            input = "";
-            std::cout << "yay" << std::endl;
+            lock_guard<mutex> lock(cout_mutex);
+            cout << " > ";
         }
-        if(input == "exit")
-        {
-            input = "";
-            std::cout << "It was anonchat, bye!" << std::endl;
+        getline(cin, input);
+        
+        if (input == "help") {
+            cout << "Commands:\n"
+                << "  connect - Join anonymous chat\n"
+                << "  exit    - Quit program\n"
+                << "  help    - Show this help\n";
+        }
+        else if (input == "exit") {
+            running = false;
+            cout << "Goodbye!" << endl;
+            if (client_socket != -1) close(client_socket);
             break;
         }
-        if(input == "connect")
-        {
-            input = "";
-            std::cout << "Searching anon..." << std::endl;
-            std::string data = "socket=";
-            send_http_request(sock, "example.com/connect", data);
+        else if (input == "connect" && !chat) {
+            cout << "Searching random peer..." << endl;
+            connect_chat();
+        }
+        else if (chat) {
+            string request = "MSG " + input + "\r\n";
+            if (send(client_socket, request.c_str(), request.size(), 0) <= 0) {
+                cerr << "Message send failed" << endl;
+                chat = false;
+                close(client_socket);
+            }
         }
     }
 
     result.get();
+
     return 0;
 }
