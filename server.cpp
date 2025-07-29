@@ -17,27 +17,27 @@ void handle_client(int client_socket) {
     string client_name = "Anonymous";
 
     try {
-        // Получаем первое сообщение (ожидаем CONNECT)
+        
         int bytes = recv(client_socket, buffer, sizeof(buffer), 0);
         if (bytes <= 0) throw runtime_error("Connection closed");
 
         string message(buffer, bytes);
         if (message.find("CONNECT") == 0) {
-            // Извлекаем имя, если указано
+            
             size_t space_pos = message.find(' ');
             if (space_pos != string::npos) {
                 client_name = message.substr(space_pos + 1);
                 client_name.erase(client_name.find_last_not_of(" \r\n") + 1);
             }
 
-            // Отправляем подтверждение
+            
             string welcome = "Welcome to chat, " + client_name + "!\n";
             send(client_socket, welcome.c_str(), welcome.size(), 0);
         } else {
             throw runtime_error("Protocol error: expected CONNECT");
         }
 
-        // Основной цикл обработки сообщений
+        
         while (true) {
             bytes = recv(client_socket, buffer, sizeof(buffer), 0);
             if (bytes <= 0) break;
@@ -46,7 +46,7 @@ void handle_client(int client_socket) {
             if (msg.find("MSG ") == 0) {
                 string broadcast = client_name + ": " + msg.substr(4);
 
-                // Отправляем всем клиентам
+                
                 lock_guard<mutex> lock(clients_mutex);
                 for (int client : clients) {
                     if (client != client_socket) {
@@ -59,7 +59,7 @@ void handle_client(int client_socket) {
         cerr << "Client error: " << e.what() << endl;
     }
 
-    // Закрываем соединение
+    
     {
         lock_guard<mutex> lock(clients_mutex);
         clients.erase(remove(clients.begin(), clients.end(), client_socket), clients.end());
