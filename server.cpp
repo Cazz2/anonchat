@@ -6,6 +6,8 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <cstdlib>
+#include <ctime>
 
 using namespace std;
 
@@ -14,7 +16,9 @@ mutex clients_mutex;
 
 void handle_client(int client_socket) {
     char buffer[1024];
-    string client_name = "Anonymous";
+    srand(time(0));
+    string client_name = "Guest_" + std::to_string(rand() % 10000);
+    //string client_name = "Anonymous";
 
     try {
         

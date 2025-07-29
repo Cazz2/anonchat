@@ -125,7 +125,7 @@ void chat_listener() {
             
             if (!msg.empty()) {
                 lock_guard<mutex> lock(cout_mutex);
-                cout << "\nAnonymous: " << msg << "\n > " << flush;
+                cout << msg << "\n > " << flush;
             }
         }
     }
@@ -192,7 +192,7 @@ int main() {
         string input;
         {
             lock_guard<mutex> lock(cout_mutex);
-            cout << " > ";
+            cout << "\n" << " > ";
         }
         getline(cin, input);
         
